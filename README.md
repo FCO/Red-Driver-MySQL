@@ -60,10 +60,11 @@ say Post.^create:
 
 # Parameters
 
-* Str :$user
-* Str :$host
-* Str :$password
-* Str :$database
+* Str  :$user
+* Str  :$host
+* Str  :$password
+* Str  :$database
+* UInt :$port
 
 # Author
 
