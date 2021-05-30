@@ -32,9 +32,9 @@ model Post is rw {
 }
 
 model Person is rw {
-    has Int  $.id            is serial;
-    has Str  $.name          is column;
-    has Post @.posts         is relationship{ .author-id };
+    has Int  $.id    is serial;
+    has Str  $.name  is column;
+    has Post @.posts is relationship{ .author-id };
     method active-posts { @!posts.grep: not *.deleted }
 }
 my $*RED-DEBUG-RESPONSE = True;
@@ -54,7 +54,8 @@ say Post.^create:
     :author{ :name<fernando> },
 ;
 
-.say for Person.^all
+.say for Person.^all;
+.say for Post.^all;
 ```
 
 # Parameters
