@@ -1,0 +1,28 @@
+{
+  "auth": "cpan:FCO",
+  "authors": [
+    "Fernando Correa de Oliveira"
+  ],
+  "build-depends": [
+  ],
+  "depends": [
+    "DBIish",
+    "Red:api<2>",
+    "DB::MySQL"
+  ],
+  "description": "blah blah blah",
+  "license": "Artistic-2.0",
+  "name": "Red::Driver::MySQL",
+  "perl": "6.c",
+  "provides": {
+    "Red::Driver::MySQL": "lib/Red/Driver/MySQL.pm6"
+  },
+  "resources": [
+  ],
+  "source-url": "",
+  "tags": [
+  ],
+  "test-depends": [
+  ],
+  "version": "0.0.1"
+}
