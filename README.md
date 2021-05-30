@@ -1,5 +1,23 @@
 [![Build Status](https://travis-ci.org/FCO/Red-Driver-MySQL.svg?branch=master)](https://travis-ci.org/FCO/Red-Driver-MySQL)
 
+### method schema-reader
+
+```raku
+method schema-reader() returns Mu
+```
+
+NYI
+
+### multi method prepare
+
+```raku
+multi method prepare(
+    Str $query
+) returns Mu
+```
+
+Prepare statement
+
 ### method begin
 
 ```raku
@@ -7,6 +25,49 @@ method begin() returns Mu
 ```
 
 Begin transaction it's being overrided here because MySQL do not accept BEGIN on `prepare`
+
+### method table-name-wrapper
+
+```raku
+method table-name-wrapper(
+    $name
+) returns Mu
+```
+
+Table name wrapper
+
+### multi method translate
+
+```raku
+multi method translate(
+    Red::AST::Infix $_ where { ... },
+    $context?
+) returns Mu
+```
+
+TODO Change Red to define the operator translation
+
+### multi method translate
+
+```raku
+multi method translate(
+    Red::AST::Not $_ where { ... },
+    $context?
+) returns Mu
+```
+
+TODO Change Red to translate AST instead of hardcoded string
+
+### multi method translate
+
+```raku
+multi method translate(
+    Red::AST::Insert $_ where { ... },
+    $context?
+) returns Mu
+```
+
+NYI
 
 Red::Driver::MySQL
 ==================

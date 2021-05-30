@@ -27,6 +27,7 @@ has Int                       $!port;
 has Str                       $!database;
 has DBDish::mysql::Connection $.dbh;
 
+#| NYI
 method schema-reader { } #Red::Driver::MySQL::SchemaReader }
 
 submethod BUILD(DBDish::mysql::Connection :$!dbh, Str :$!host = q<localhost>, :$!user = "root", :$!port = 3306, :$!password, :$!database!) {}
@@ -44,6 +45,7 @@ class Statement does Red::Statement {
     method stt-row($stt) { $stt.row: :hash }
 }
 
+#| Prepare statement
 multi method prepare(Str $query) {
     CATCH {
         default {
@@ -68,11 +70,12 @@ method begin {
     $trans
 }
 
+#| Table name wrapper
 method table-name-wrapper($name) { qq[`$name`] }
 
 multi method should-drop-cascade { True }
 
-# TODO Change Red to define the operator translation
+#| TODO Change Red to define the operator translation
 multi method translate(Red::AST::Infix $_ where { .op eq "==" }, $context?) {
     my ($lstr, @lbind) := do given self.translate: .left,  .bind-left  ?? "bind" !! $context { .key, .value }
     my ($rstr, @rbind) := do given self.translate: .right, .bind-right ?? "bind" !! $context { .key, .value }
@@ -80,12 +83,13 @@ multi method translate(Red::AST::Infix $_ where { .op eq "==" }, $context?) {
     "$lstr = $rstr" => [|@lbind, |@rbind]
 }
 
-# TODO Change Red to translate AST instead of hardcoded string
+#| TODO Change Red to translate AST instead of hardcoded string
 multi method translate(Red::AST::Not $_ where { .value ~~ Red::Column and .value.attr.type !~~ Str }, $context?) {
     my ($val, @bind) := do given self.translate: .value, $context { .key, .value }
     "($val = 0 OR $val IS NULL)" => @bind
 }
 
+#| NYI
 multi method translate(Red::AST::Insert $_ where { !.values.grep({ .value.value.defined }) }, $context?) {
     die "Insert empty row on MySQL is NYI"
 }
