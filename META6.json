@@ -7,8 +7,7 @@
   ],
   "depends": [
     "DBIish",
-    "Red:api<2>",
-    "DB::MySQL"
+    "Red:api<2>"
   ],
   "description": "blah blah blah",
   "license": "Artistic-2.0",
@@ -19,10 +18,11 @@
   },
   "resources": [
   ],
-  "source-url": "",
+  "source-url": "https://github.com/FCO/Red-Driver-MySQL.git",
   "tags": [
   ],
   "test-depends": [
+    "App::Mi6"
   ],
   "version": "0.0.1"
 }

@@ -5,6 +5,7 @@ use Red::Driver;
 use Red::Statement;
 use Red::AST::Value;
 use Red::AST::Select;
+use Red::AST::Infix;
 use Red::AST::Infixes;
 use Red::AST::Function;
 use Red::Driver::CommonSQL;
@@ -31,7 +32,7 @@ method schema-reader { } #Red::Driver::MySQL::SchemaReader }
 submethod BUILD(DBDish::mysql::Connection :$!dbh, Str :$!host = q<localhost>, :$!user = "root", :$!port = 3306, :$!password, :$!database!) {}
 
 submethod TWEAK() {
-    $!dbh //= DBIish.connect: "mysql", |(:$!database with $!database), :$!host, :$!user, :$!port, :$!password;
+    $!dbh //= DBIish.connect: "mysql", :$!database, :$!host, :$!user, :$!port, :$!password;
 }
 
 class Statement does Red::Statement {
@@ -68,6 +69,22 @@ method begin {
 }
 
 method table-name-wrapper($name) { qq[`$name`] }
+
+multi method should-drop-cascade { True }
+
+# TODO Change Red to define the operator translation
+multi method translate(Red::AST::Infix $_ where { .op eq "==" }, $context?) {
+    my ($lstr, @lbind) := do given self.translate: .left,  .bind-left  ?? "bind" !! $context { .key, .value }
+    my ($rstr, @rbind) := do given self.translate: .right, .bind-right ?? "bind" !! $context { .key, .value }
+
+    "$lstr = $rstr" => [|@lbind, |@rbind]
+}
+
+# TODO Change Red to translate AST instead of hardcoded string
+multi method translate(Red::AST::Not $_ where { .value ~~ Red::Column and .value.attr.type !~~ Str }, $context?) {
+    my ($val, @bind) := do given self.translate: .value, $context { .key, .value }
+    "($val = 0 OR $val IS NULL)" => @bind
+}
 
 multi method translate(Red::AST::Insert $_ where { !.values.grep({ .value.value.defined }) }, $context?) {
     die "Insert empty row on MySQL is NYI"
@@ -191,3 +208,82 @@ multi method map-exception(X::DBDish::DBError $x where { .?code == 1 and .native
             :table($<table>.Str)
 }
 
+=begin pod
+
+=head1 Red::Driver::MySQL
+
+Red driver for MySQL.
+
+=head2 Install
+
+=code :lang<bash> zef install Red::Driver::MySQL
+
+=head2 Synopsis
+
+=begin code :lang<raku>
+use Red:api<2>;
+
+model Person {...}
+
+model Post is rw {
+    has Int         $.id        is serial;
+    has Int         $!author-id is referencing( *.id, :model(Person) );
+    has Str         $.title     is column{ :unique };
+    has Str         $.body      is column;
+    has Person      $.author    is relationship{ .author-id };
+    has Bool        $.deleted   is column = False;
+    has DateTime    $.created   is column .= now;
+    has Set         $.tags      is column{
+        :type<string>,
+        :deflate{ .keys.join: "," },
+        :inflate{ set(.split: ",") }
+    } = set();
+    method delete { $!deleted = True; self.^save }
+}
+
+model Person is rw {
+    has Int  $.id    is serial;
+    has Str  $.name  is column;
+    has Post @.posts is relationship{ .author-id };
+    method active-posts { @!posts.grep: not *.deleted }
+}
+my $*RED-DEBUG-RESPONSE = True;
+my $*RED-DB = database "MySQL",
+    :user<root>,
+    :host<127.0.0.1>,
+    :password<test>,
+    :database<test>,
+;
+my $*RED-DEBUG = True;
+schema(Person, Post).drop.create;
+
+say Post.^create:
+    :title<test>,
+    :body("test 001"),
+    :tags(set <bla ble bli>),
+    :author{ :name<fernando> },
+;
+
+.say for Person.^all;
+.say for Post.^all;
+=end code
+
+=head2 Parameters
+
+=item C<Str  :$user>
+=item C<Str  :$host>
+=item C<Str  :$password>
+=item C<Str  :$database>
+=item C<UInt :$port>
+
+=head2 Author
+
+Fernando Correa de Oliveira <fernandocorrea@gmail.com>
+
+=head2 Copyright and license
+
+Copyright 2018 Fernando Correa de Oliveira
+
+This library is free software; you can redistribute it and/or modify it under the Artistic License 2.0.
+
+=end pod

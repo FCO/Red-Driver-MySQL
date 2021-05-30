@@ -1,4 +1,4 @@
-#!raku
+#!/usr/bin/env raku
 use v6;
 use Test;
 
@@ -35,7 +35,10 @@ my @conf                = (%*ENV<RED_DATABASE> // "MySQL").split(" ");
 my $driver              = @conf.shift;
 my $*RED-DB             = database $driver, |%( @conf.map: { do given .split: "=" { .[0] => .[1] } } );
 
-lives-ok { schema(Person, Post).drop.create }
+$*RED-DB.execute: "DROP TABLE post";
+$*RED-DB.execute: "DROP TABLE person";
+
+lives-ok { schema(Person, Post).create }
 
 my $p;
 lives-ok { $p = Person.^create: :name<Fernando> }

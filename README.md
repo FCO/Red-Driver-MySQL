@@ -1,14 +1,25 @@
-# Red::Driver::MySQL
+[![Build Status](https://travis-ci.org/FCO/Red-Driver-MySQL.svg?branch=master)](https://travis-ci.org/FCO/Red-Driver-MySQL)
+
+### method begin
+
+```raku
+method begin() returns Mu
+```
+
+Begin transaction it's being overrided here because MySQL do not accept BEGIN on `prepare`
+
+Red::Driver::MySQL
+==================
 
 Red driver for MySQL.
 
-# Install
+Install
+-------
 
-```bash
-zef install Red::Driver::MySQL
-```
+    :lang<bash> zef install Red::Driver::MySQL
 
-# Synopsis
+Synopsis
+--------
 
 ```raku
 use Red:api<2>;
@@ -58,20 +69,28 @@ say Post.^create:
 .say for Post.^all;
 ```
 
-# Parameters
+Parameters
+----------
 
-* Str  :$user
-* Str  :$host
-* Str  :$password
-* Str  :$database
-* UInt :$port
+  * `Str :$user`
 
-# Author
+  * `Str :$host`
+
+  * `Str :$password`
+
+  * `Str :$database`
+
+  * `UInt :$port`
+
+Author
+------
 
 Fernando Correa de Oliveira <fernandocorrea@gmail.com>
 
-# Copyright and license
+Copyright and license
+---------------------
 
 Copyright 2018 Fernando Correa de Oliveira
 
 This library is free software; you can redistribute it and/or modify it under the Artistic License 2.0.
+
