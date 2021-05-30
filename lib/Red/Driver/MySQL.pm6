@@ -24,7 +24,7 @@ has Str                       $!password;
 has Str                       $!host;
 has Int                       $!port;
 has Str                       $!database;
-has DBDish::mysql::Connection $!dbh;
+has DBDish::mysql::Connection $.dbh;
 
 method schema-reader { } #Red::Driver::MySQL::SchemaReader }
 
@@ -53,14 +53,19 @@ multi method prepare(Str $query) {
     Statement.new: :driver(self), :statement($!dbh.prepare: $query);
 }
 
-method create-schema(%models where .values.all ~~ Red::Model) {
-    do for %models.kv -> Str() $name, Red::Model $model {
-        $name => $model.^create-table
-    }
-}
-
 #multi method join-type("outer") { die "'OUTER JOIN' is not supported by MySQL" }
 #multi method join-type("right") { die "'RIGHT JOIN' is not supported by MySQL" }
+
+# TODO: do not hardcode it
+#| Begin transaction
+#| it's being overrided here because MySQL do not accept BEGIN on `prepare`
+method begin {
+    my $trans = self.new-connection;
+    my $sql = "BEGIN";
+    self.debug: $sql;
+    $trans.dbh.execute: $sql;
+    $trans
+}
 
 method table-name-wrapper($name) { qq[`$name`] }
 

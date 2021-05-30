@@ -45,8 +45,7 @@ my $*RED-DB = database "MySQL",
     :database<test>,
 ;
 my $*RED-DEBUG = True;
-Person.^create-table;
-Post.^create-table;
+schema(Person, Post).drop.create;
 
 say Post.^create:
     :title<test>,

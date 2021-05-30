@@ -2,3 +2,5 @@ Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
     - Initial version
+    - Workarroung transaction
+    - Fix schema's .create()
