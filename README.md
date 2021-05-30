@@ -16,7 +16,7 @@ Red driver for MySQL.
 Install
 -------
 
-    :lang<bash> zef install Red::Driver::MySQL
+    zef install Red::Driver::MySQL
 
 Synopsis
 --------
