@@ -30,10 +30,23 @@ has DBDish::mysql::Connection $.dbh;
 #| NYI
 method schema-reader { } #Red::Driver::MySQL::SchemaReader }
 
-submethod BUILD(DBDish::mysql::Connection :$!dbh, Str :$!host = q<localhost>, :$!user = "root", :$!port = 3306, :$!password, :$!database!) {}
+submethod BUILD(
+    DBDish::mysql::Connection :$!dbh,
+    Str  :$!host = q<localhost>,
+    Str  :$!user = "root",
+    UInt :$!port = 3306,
+    Str  :$!password,
+    Str  :$!database!,
+) {}
 
 submethod TWEAK() {
-    $!dbh //= DBIish.connect: "mysql", :$!database, :$!host, :$!user, :$!port, :$!password;
+    $!dbh //= DBIish.connect: "mysql",
+        :$!database,
+        |(:$!host     with $!host),
+        |(:$!user     with $!user),
+        |(:$!port     with $!port),
+        |(:$!password with $!password),
+    ;
 }
 
 class Statement does Red::Statement {
