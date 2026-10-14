@@ -7,14 +7,17 @@
   ],
   "depends": [
     "DBIish",
+    "JSON::Fast",
+    "UUID",
     "Red:api<2>"
   ],
-  "description": "blah blah blah",
+  "description": "MySQL driver and schema reader for the Red ORM",
   "license": "Artistic-2.0",
   "name": "Red::Driver::MySQL",
   "perl": "6.c",
   "provides": {
-    "Red::Driver::MySQL": "lib/Red/Driver/MySQL.pm6"
+    "Red::Driver::MySQL": "lib/Red/Driver/MySQL.pm6",
+    "Red::Driver::MySQL::SchemaReader": "lib/Red/Driver/MySQL/SchemaReader.pm6"
   },
   "resources": [
   ],

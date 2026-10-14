@@ -1,0 +1,18 @@
+FROM rakudo-star:2026.06-bookworm
+
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends \
+       git libmariadb-dev-compat libpq-dev libsqlite3-dev uuid-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin the Red suite so a new upstream commit cannot silently change CI coverage.
+COPY tools/red-revision /tmp/red-revision
+RUN git clone https://github.com/FCO/Red.git /red \
+    && git -C /red checkout "$(cat /tmp/red-revision)" \
+    && zef install --/test --test-depends --deps-only /red \
+    && zef install --/test App::Prove6 Config Config::Parser::json
+
+WORKDIR /driver
+COPY . .
+RUN raku -Ilib -I/red/lib -e 'use Red::Driver::MySQL;'
+CMD ["sh", "tools/test.sh"]

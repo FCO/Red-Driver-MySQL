@@ -1,0 +1,7 @@
+.git
+.precomp
+**/.precomp
+.raku
+.zef
+test-results
+*.log

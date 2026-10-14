@@ -6,7 +6,7 @@
 method schema-reader() returns Mu
 ```
 
-NYI
+Read tables, columns and indexes from the connected database.
 
 ### multi method prepare
 
@@ -67,7 +67,7 @@ multi method translate(
 ) returns Mu
 ```
 
-NYI
+MySQL's syntax for inserting a row using only database defaults.
 
 Red::Driver::MySQL
 ==================
@@ -142,6 +142,28 @@ Parameters
   * `Str :$database`
 
   * `UInt :$port`
+
+Tests
+-----
+
+Run the driver tests and the pinned upstream Red suite against MySQL 8.4:
+
+    docker compose up --build --abort-on-container-exit --exit-code-from tests
+    docker compose down --volumes
+
+Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests. tools/red-revision pins the Red revision for the build and runner, and TEST_JOBS controls parallelism (default: 4).
+
+For an existing disposable MySQL server and a separate Red checkout:
+
+    MYSQL_HOST=127.0.0.1 MYSQL_PASSWORD=test RED_SOURCE=/path/to/Red sh tools/test.sh
+
+The test user needs CREATE DATABASE and DROP DATABASE privileges. The runner applies tools/red-suite-mysql.patch to the test checkout: it replaces a raw SQLite/PostgreSQL VALUES fixture with portable SELECT statements and compares an unordered query as a Bag. Existing upstream skips and TODOs remain intact.
+
+Offline driver tests can run without MySQL:
+
+    raku -Ilib t/01-basic.t
+    raku -Ilib t/03-schema-reader.t
+    raku t/05-runner.t
 
 Author
 ------

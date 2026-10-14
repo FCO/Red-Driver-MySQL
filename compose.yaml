@@ -1,0 +1,25 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: red-driver-test
+      MYSQL_ROOT_HOST: '%'
+    healthcheck:
+      test: [CMD-SHELL, 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 2s
+      timeout: 5s
+      retries: 40
+    tmpfs:
+      - /var/lib/mysql
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: red-driver-test
+      RED_SOURCE: /red
+      TEST_JOBS: ${TEST_JOBS:-4}

@@ -1,6 +1,14 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+    - Preserve string binds and reusable INSERT results with current bound keys
+    - Configure utf8mb4 on the native MySQL client and preserve JSON null values
+    - Validate the Red checkout revision before applying test fixtures
+    - Implement MySQL schema reader and default-only inserts
+    - Read back inserted rows with generated, natural and composite keys
+    - Fix MySQL JSON, boolean, string, date and UPDATE translations
+    - Reuse CommonSQL type defaults and restore foreign key checks after schema drops
+    - Add isolated MySQL integration tests and the upstream Red suite to local Docker and GitHub Actions
     - Initial version
     - Workarroung transaction
     - Fix schema's .create()
