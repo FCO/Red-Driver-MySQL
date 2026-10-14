@@ -1,6 +1,8 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+
+0.0.1  2026-10-15T00:09:40+01:00
     - Preserve string binds and reusable INSERT results with current bound keys
     - Configure utf8mb4 on the native MySQL client and preserve JSON null values
     - Validate the Red checkout revision before applying test fixtures
