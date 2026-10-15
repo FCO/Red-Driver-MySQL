@@ -1,6 +1,8 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+
+0.0.2  2026-10-15T18:11:40+01:00
     - Remove the external fixture patch and pin Red's upstream MySQL fixture fixes
     - Support OFFSET without LIMIT in projected and derived MySQL queries
     - Translate current Red JSON existence, element counts, containment and composed updates

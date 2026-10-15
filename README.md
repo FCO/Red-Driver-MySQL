@@ -151,13 +151,13 @@ Run the driver tests and the pinned upstream Red suite against MySQL 8.4:
     docker compose up --build --abort-on-container-exit --exit-code-from tests
     docker compose down --volumes
 
-Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with `RAKUDO_RAKUAST=0`. tools/red-revision pins Red to `d01165685356cc06ec2e00e57ef561b857699af2` for the build and runner, including the JSON operations, projection chains, and SQL tail regression suites. TEST_JOBS controls parallelism (default: 4).
+Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with RAKUDO_RAKUAST=0. tools/red-revision pins Red to d01165685356cc06ec2e00e57ef561b857699af2 for the build and runner, including the JSON operations, projection chains, and SQL tail regression suites. TEST_JOBS controls parallelism (default: 4).
 
 For an existing disposable MySQL server and a separate Red checkout:
 
     MYSQL_HOST=127.0.0.1 MYSQL_PASSWORD=test RED_SOURCE=/path/to/Red sh tools/test.sh
 
-The test user needs CREATE DATABASE and DROP DATABASE privileges. The pinned Red revision includes the portable view fixtures and unordered-result comparison upstream, so the runner uses the checkout without applying patches. Existing upstream skips and TODOs remain intact.
+The test user needs CREATE DATABASE and DROP DATABASE privileges. The runner uses the pinned checkout without applying patches: portable view fixtures and the unordered-result comparison are included upstream. Existing upstream skips and TODOs remain intact.
 
 Offline driver tests can run without MySQL:
 
@@ -166,7 +166,7 @@ Offline driver tests can run without MySQL:
     raku t/05-runner.t
     RAKUDO_RAKUAST=0 raku -Ilib -I/path/to/Red/lib t/06-query-translation.t
 
-The translation tests require the pinned Red API. `t/07-query-mysql.t` covers offsets, projected JSON operations, and bound text across pagination and tail boundaries. Text results reported by MySQL using BLOB-family types are decoded only when their result metadata specifies a nonbinary charset; actual binary BLOB columns remain byte buffers.
+The translation tests require the pinned Red API. t/07-query-mysql.t covers offsets, projected JSON operations, and bound text across pagination and tail boundaries. Text results reported by MySQL using BLOB-family types are decoded only when their result metadata specifies a nonbinary charset; actual binary BLOB columns remain byte buffers.
 
 Author
 ------
