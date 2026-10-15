@@ -13,6 +13,9 @@ use Red::AST::LastInsertedRow;
 use Red::AST::TableComment;
 use Red::AST::JsonItem;
 use Red::AST::JsonRemoveItem;
+use Red::AST::JsonSetItem;
+use Red::AST::JsonOperation;
+use Red::Projection;
 use Red::AST::DateTimeFuncs;
 use X::Red::Exceptions;
 use UUID;
@@ -69,6 +72,7 @@ sub insert-values(Red::AST::Insert $ast) {
 
 class Statement does Red::Statement {
     has Red::AST::Insert $.insert is rw;
+    has Str @.text-columns;
     has Bool $!insert-pending = False;
     has %!insert-values;
     method stt-exec($stt, *@bind) {
@@ -83,7 +87,15 @@ class Statement does Red::Statement {
         $stt
     }
     method stt-row($stt) {
-        return $stt.row(:hash) unless $!insert.DEFINITE;
+        unless $!insert.DEFINITE {
+            my $row = $stt.row(:hash);
+            if $row.defined {
+                for @!text-columns -> $name {
+                    $row{$name} = $row{$name}.decode('utf8') if $row{$name} ~~ Blob;
+                }
+            }
+            return $row;
+        }
         return Nil unless $!insert-pending;
         $!insert-pending = False;
         my $insert = $!insert;
@@ -127,7 +139,20 @@ multi method prepare(Str $query) {
         }
     }
     self.debug: $query;
-    Statement.new: :driver(self), :statement($!dbh.prepare: $query);
+    my $statement = $!dbh.prepare($query);
+    # DBIish maps BLOB-family protocol types to Buf without checking charset.
+    # MySQL also uses those types for long text expressions with bound values.
+    # Charset 63 is binary; only nonbinary result columns may be UTF-8 decoded.
+    my @text-columns;
+    my $attribute = $statement.^attributes.first(*.name eq '$!stmt');
+    my $metadata = $attribute.get_value($statement).mysql_stmt_result_metadata;
+    if $metadata {
+        LEAVE $metadata.mysql_free_result;
+        while $metadata.mysql_fetch_field -> $field {
+            @text-columns.push: $field.name if $field.charsetnr != 63;
+        }
+    }
+    Statement.new: :driver(self), :$statement, :@text-columns;
 }
 
 # Red::Schema.drop can visit a referenced table before its children. Restore
@@ -166,6 +191,9 @@ method begin {
 method table-name-wrapper($name) { '`' ~ $name.subst('`', '``', :g) ~ '`' }
 
 multi method should-drop-cascade { False }
+
+# MySQL requires a LIMIT whenever OFFSET is present, including derived SELECTs.
+method offset-without-limit { 18446744073709551615 }
 
 #| TODO Change Red to define the operator translation
 multi method translate(Red::AST::Infix $_ where { .op eq "==" }, $context?) {
@@ -239,21 +267,48 @@ multi method translate(Red::AST::DateTimePart $_, $context?) {
 multi method translate(Red::AST::DateTimeToday $_, $context?) { 'CURRENT_DATE' => [] }
 
 # Materialize subqueries that read the table being updated (MySQL error 1093).
-multi method translate(Red::AST::Update $_, $context?) {
+multi method translate(Red::AST::Update $ast, $context?) {
     my $*MYSQL-UPDATING = True;
+    # Compose successive assignments to one JSON column in their original order.
+    my @values;
+    my %json-updates;
+    for $ast.values -> $pair {
+        my $column = $pair.key;
+        my $value = $pair.value;
+        if $column ~~ Red::AST::JsonItem {
+            $value = Red::AST::JsonSetItem.new:
+                :left($column.left), :right($column.right), :$value;
+            $column = $column.left;
+        }
+        if $column.returns ~~ Json {
+            my $key = $column.WHICH.Str;
+            if %json-updates{$key}:exists {
+                my $index = %json-updates{$key};
+                if $value ~~ Red::AST::JsonSetItem | Red::AST::JsonRemoveItem {
+                    $value = $value.replace($column, @values[$index].value);
+                }
+                @values[$index] = $column => $value;
+            } else {
+                %json-updates{$key} = @values.elems;
+                @values.push: $column => $value;
+            }
+        } else {
+            @values.push: $pair;
+        }
+    }
     my @bind;
-    my $assignments = .values.map({
+    my $assignments = @values.map({
         my $value = self.translate(ast-value($_), 'update');
         @bind.append: $value.value;
         $value.key
     }).join(', ');
-    my $filter = .filter;
+    my $filter = $ast.filter;
     if $filter.DEFINITE && $filter.tables.map({ .HOW.?join-on($_) }).any {
-        $filter = Red::AST::In.new(.model.^id».column.head,
-            Red::AST::Select.new(:of(.model.^specialise(.model.^id».column)), :$filter));
+        $filter = Red::AST::In.new($ast.model.^id».column.head,
+            Red::AST::Select.new(:of($ast.model.^specialise($ast.model.^id».column)), :$filter));
     }
     my $where = self.translate($filter);
-    "UPDATE { self.table-name-wrapper(.into) } SET { $assignments }{
+    "UPDATE { self.table-name-wrapper($ast.into) } SET { $assignments }{
         $filter.DEFINITE ?? ' WHERE ' ~ $where.key !! ''
     }" => [|@bind, |$where.value]
 }
@@ -272,8 +327,18 @@ multi method translate(Red::AST::Value $_ where .type ~~ Bool, $context? where {
 }
 
 multi method translate(Red::AST::Value $_ where { .type ~~ Json }, $context? where { !.defined || $_ ne "bind" }) {
+    return 'NULL' => [] if .value === Json;
     my $value = self.translate: ast-value(.get-value, :type(Str)), $context;
     "CAST({ $value.key } AS JSON)" => $value.value
+}
+
+multi method translate(Red::AST::Value $_ where { .type ~~ Json }, 'json-value') {
+    return 'NULL' => [] if .value === Json;
+    'CAST(? AS JSON)' => [self.wildcard-value($_)]
+}
+
+multi method translate(Red::AST::Value $_ where { .type ~~ Json }, 'update-rval') {
+    self.translate($_, 'json-value')
 }
 
 multi method translate(Red::AST::Value $_ where { .type ~~ Str && .type !~~ Json },
@@ -285,6 +350,34 @@ multi method translate(Red::AST::Value $_ where { .type ~~ Str && .type !~~ Json
 }
 
 multi method prepare-json-path-item(Str $key) { '.' ~ to-json($key, :!pretty) }
+
+# Paths stay bound; dynamic keys are JSON-quoted rather than interpolated as SQL.
+method mysql-json-path(Red::AST $path) {
+    my @sql = q['$'];
+    my @bind;
+    for self.json-path-items($path) -> $item {
+        if $item ~~ Red::AST::Value {
+            my $part = $item.value ~~ Int
+                ?? ($item.value < 0 ?? '[last-' ~ (-$item.value - 1) ~ ']'
+                    !! "[{ $item.value }]")
+                !! '.' ~ to-json($item.value.Str, :!pretty);
+            @sql.push: '?';
+            @bind.push: $part;
+        } else {
+            my ($sql, @values) := self.translate($item, 'json-path').kv;
+            if $item.returns ~~ Int {
+                @sql.push: "CASE WHEN $sql < 0 "
+                    ~ "THEN CONCAT('[last-', -($sql) - 1, ']') "
+                    ~ "ELSE CONCAT('[', $sql, ']') END";
+                @bind.append: |@values, |@values, |@values;
+            } else {
+                @sql.push: "CONCAT('.', JSON_QUOTE($sql))";
+                @bind.append: @values;
+            }
+        }
+    }
+    'CONCAT(' ~ @sql.join(', ') ~ ')' => @bind
+}
 
 multi method translate(Red::AST::So $_ where { .value ~~ Red::Column and .value.attr.type !~~ Str }, $context?) {
     my ($val, @bind) := do given self.translate: .value, $context { .key, .value }
@@ -314,38 +407,56 @@ multi method translate(Red::Column $_, "column-comment") {
 }
 
 multi method translate(Red::AST::JsonRemoveItem $_, $context?) {
-    self.translate:
-            Red::AST::Function.new:
-                    :func<JSON_REMOVE>,
-                    :args[
-                        .left,
-                        ast-value('$' ~ self.prepare-json-path-item: .right.value)
-                    ],
-                    :returns(Json),
+    my ($left, @lb) := self.translate(.left, $context).kv;
+    my ($path, @pb) := self.mysql-json-path(.right).kv;
+    "JSON_REMOVE($left, $path)" => [|@lb, |@pb]
 }
 
 multi method translate(Red::AST::JsonItem $_, $context?) {
-    self.translate:
-            Red::AST::Function.new:
-                    :func<JSON_EXTRACT>,
-                    :args[
-                        .left,
-                        ast-value('$' ~ self.prepare-json-path-item: .right.value)
-                    ],
-                    :returns(Json),
+    my ($left, @lb) := self.translate(.left, 'json-source').kv;
+    my ($path, @pb) := self.mysql-json-path(.right).kv;
+    "JSON_EXTRACT($left, $path)" => [|@lb, |@pb]
 }
 
 multi method translate(Red::AST::Value $_ where { .type ~~ Pair and .value.key ~~ Red::AST::JsonItem}, "update") {
-    my $value = Red::AST::Function.new:
-            :func<JSON_SET>,
-            :args[
-                .value.key.left,
-                ast-value('$' ~ self.prepare-json-path-item(.value.key.right.value)),
-                .value.value
-            ],
-            :returns(Json),
-    ;
-    self.translate: ast-value(.value.key.left => $value), "update"
+    my $item = .value.key;
+    self.translate: ast-value($item.left => Red::AST::JsonSetItem.new(
+        :left($item.left), :right($item.right), :value(.value.value))), 'update'
+}
+
+multi method translate(Red::AST::JsonSetItem $_, $context?) {
+    my ($left, @lb) := self.translate(.left, $context).kv;
+    my ($path, @pb) := self.mysql-json-path(.right).kv;
+    my ($value, @vb) := self.translate(.value, 'json-value').kv;
+    my $json = $value;
+    if .value.returns ~~ Json {
+        $json = "COALESCE($value, CAST('null' AS JSON))";
+    } elsif .value.returns ~~ Bool {
+        $json = "CAST(CASE WHEN $value IS NULL THEN 'null' "
+            ~ "WHEN $value THEN 'true' ELSE 'false' END AS JSON)";
+        @vb.append: @vb.Array;
+    }
+    "JSON_SET($left, $path, $json)" => [|@lb, |@pb, |@vb]
+}
+
+multi method translate(Red::AST::JsonOperation $operation, $context?) {
+    if $operation.operation eq 'exists' {
+        my $item = $operation.value;
+        my ($left, @lb) := self.translate($item.left, 'json-source').kv;
+        my ($path, @pb) := self.mysql-json-path($item.right).kv;
+        return "COALESCE(JSON_CONTAINS_PATH($left, 'one', $path), 0)" => [|@lb, |@pb];
+    }
+    if $operation.operation eq 'elems' {
+        my $presence = $operation.presence.DEFINITE ?? $operation.presence
+            !! Red::Projection.json-presence($operation.value);
+        my ($present, @pb) := self.translate($presence, $context).kv;
+        my ($value, @vb) := self.translate($operation.value, 'json-value').kv;
+        return "CASE WHEN NOT ($present) THEN 0 ELSE COALESCE(JSON_LENGTH($value), 1) END"
+            => [|@pb, |@vb];
+    }
+    my ($value, @vb) := self.translate($operation.value, 'json-value').kv;
+    my ($argument, @ab) := self.translate($operation.argument, 'json-value').kv;
+    "COALESCE(JSON_CONTAINS($value, $argument), 0)" => [|@vb, |@ab]
 }
 
 multi method translate(Red::AST::Minus $ast, "multi-select-op") { "EXCEPT" => [] }
@@ -477,8 +588,10 @@ docker compose down --volumes
 =end code
 
 Each test file gets a separate disposable database. The same command runs on
-GitHub Actions for pushes and pull requests. tools/red-revision pins the Red
-revision for the build and runner, and TEST_JOBS controls parallelism (default: 4).
+GitHub Actions for pushes and pull requests with RAKUDO_RAKUAST=0.
+tools/red-revision pins Red to e71afec9a1734fe41040e74c31e8a43790e32e75 for
+the build and runner, including the JSON operations, projection chains, and SQL
+tail regression suites. TEST_JOBS controls parallelism (default: 4).
 
 For an existing disposable MySQL server and a separate Red checkout:
 
@@ -497,7 +610,14 @@ Offline driver tests can run without MySQL:
 raku -Ilib t/01-basic.t
 raku -Ilib t/03-schema-reader.t
 raku t/05-runner.t
+RAKUDO_RAKUAST=0 raku -Ilib -I/path/to/Red/lib t/06-query-translation.t
 =end code
+
+The translation tests require the pinned Red API. t/07-query-mysql.t covers
+offsets, projected JSON operations, and bound text across pagination and tail
+boundaries. Text results reported by MySQL using BLOB-family types are decoded
+only when their result metadata specifies a nonbinary charset; actual binary
+BLOB columns remain byte buffers.
 
 =head2 Author
 

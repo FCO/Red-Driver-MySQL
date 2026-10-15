@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+export RAKUDO_RAKUAST=0
 driver_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 red_source=${RED_SOURCE:-/red}
 export RED_SOURCE="$red_source"

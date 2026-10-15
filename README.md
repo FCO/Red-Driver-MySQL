@@ -151,7 +151,7 @@ Run the driver tests and the pinned upstream Red suite against MySQL 8.4:
     docker compose up --build --abort-on-container-exit --exit-code-from tests
     docker compose down --volumes
 
-Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests. tools/red-revision pins the Red revision for the build and runner, and TEST_JOBS controls parallelism (default: 4).
+Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with `RAKUDO_RAKUAST=0`. tools/red-revision pins Red to `e71afec9a1734fe41040e74c31e8a43790e32e75` for the build and runner, including the JSON operations, projection chains, and SQL tail regression suites. TEST_JOBS controls parallelism (default: 4).
 
 For an existing disposable MySQL server and a separate Red checkout:
 
@@ -164,6 +164,9 @@ Offline driver tests can run without MySQL:
     raku -Ilib t/01-basic.t
     raku -Ilib t/03-schema-reader.t
     raku t/05-runner.t
+    RAKUDO_RAKUAST=0 raku -Ilib -I/path/to/Red/lib t/06-query-translation.t
+
+The translation tests require the pinned Red API. `t/07-query-mysql.t` covers offsets, projected JSON operations, and bound text across pagination and tail boundaries. Text results reported by MySQL using BLOB-family types are decoded only when their result metadata specifies a nonbinary charset; actual binary BLOB columns remain byte buffers.
 
 Author
 ------

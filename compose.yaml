@@ -20,6 +20,7 @@ services:
         condition: service_healthy
     environment:
       MYSQL_HOST: mysql
+      RAKUDO_RAKUAST: '0'
       MYSQL_PASSWORD: red-driver-test
       RED_SOURCE: /red
       TEST_JOBS: ${TEST_JOBS:-4}

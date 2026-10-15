@@ -97,8 +97,8 @@ subtest 'JSON null differs from SQL NULL', {
     ok $*RED-DB.execute("SELECT value IS NULL AS missing FROM $table WHERE id = ?", $row.id).row<missing>,
         'Json type object is SQL NULL';
     $row = MySQLJson.^create;
-    is $*RED-DB.execute("SELECT JSON_TYPE(value) AS kind FROM $table WHERE id = ?", $row.id).row<kind>,
-        'NULL', 'implicit Any default follows Red JSON null semantics';
+    ok $*RED-DB.execute("SELECT value IS NULL AS missing FROM $table WHERE id = ?", $row.id).row<missing>,
+        'implicit Json default is SQL NULL';
 };
 
 subtest 'foreign key checks restored after failed drop', {

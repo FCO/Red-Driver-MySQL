@@ -1,6 +1,10 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+    - Support OFFSET without LIMIT in projected and derived MySQL queries
+    - Translate current Red JSON existence, element counts, containment and composed updates
+    - Decode textual BLOB-family query results using their nonbinary charset metadata
+    - Pin the current Red query regression suite and validate with RAKUDO_RAKUAST=0
 
 0.0.1  2026-10-15T00:09:40+01:00
     - Preserve string binds and reusable INSERT results with current bound keys
