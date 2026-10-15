@@ -1,6 +1,7 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+    - Remove the external fixture patch and pin Red's upstream MySQL fixture fixes
     - Support OFFSET without LIMIT in projected and derived MySQL queries
     - Translate current Red JSON existence, element counts, containment and composed updates
     - Decode textual BLOB-family query results using their nonbinary charset metadata

@@ -151,13 +151,13 @@ Run the driver tests and the pinned upstream Red suite against MySQL 8.4:
     docker compose up --build --abort-on-container-exit --exit-code-from tests
     docker compose down --volumes
 
-Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with `RAKUDO_RAKUAST=0`. tools/red-revision pins Red to `e71afec9a1734fe41040e74c31e8a43790e32e75` for the build and runner, including the JSON operations, projection chains, and SQL tail regression suites. TEST_JOBS controls parallelism (default: 4).
+Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with `RAKUDO_RAKUAST=0`. tools/red-revision pins Red to `d01165685356cc06ec2e00e57ef561b857699af2` for the build and runner, including the JSON operations, projection chains, and SQL tail regression suites. TEST_JOBS controls parallelism (default: 4).
 
 For an existing disposable MySQL server and a separate Red checkout:
 
     MYSQL_HOST=127.0.0.1 MYSQL_PASSWORD=test RED_SOURCE=/path/to/Red sh tools/test.sh
 
-The test user needs CREATE DATABASE and DROP DATABASE privileges. The runner applies tools/red-suite-mysql.patch to the test checkout: it replaces a raw SQLite/PostgreSQL VALUES fixture with portable SELECT statements and compares an unordered query as a Bag. Existing upstream skips and TODOs remain intact.
+The test user needs CREATE DATABASE and DROP DATABASE privileges. The pinned Red revision includes the portable view fixtures and unordered-result comparison upstream, so the runner uses the checkout without applying patches. Existing upstream skips and TODOs remain intact.
 
 Offline driver tests can run without MySQL:
 
