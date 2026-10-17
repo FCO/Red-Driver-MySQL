@@ -8,6 +8,16 @@ method schema-reader() returns Mu
 
 Read tables, columns and indexes from the connected database.
 
+### method indexes-for-table
+
+```raku
+method indexes-for-table(
+    Str $table
+) returns Array
+```
+
+Inspect ordered index keys, including legacy unique constraints and PRIMARY.
+
 ### multi method prepare
 
 ```raku
@@ -143,10 +153,15 @@ Parameters
 
   * `UInt :$port`
 
+Savepoints
+----------
+
+With a Red checkout providing the savepoint API, nested transactions use MySQL savepoints on the existing connection. Names are quoted as identifiers and commands use the text protocol. Rolling back to a savepoint keeps its marker active; releasing it does not commit the surrounding transaction. Dry runs do not execute the commands.
+
 Declarative indexes
 -------------------
 
-With a Red checkout providing `Red::Index` and `Red::AST::CreateIndex`, MySQL supports the core's declarative column, composite, functional and unique indexes:
+With a Red checkout providing Red::Index and Red::AST::CreateIndex, MySQL supports the core's declarative column, composite, functional and unique indexes:
 
 ```raku
 model Contact {
@@ -160,7 +175,7 @@ Contact.^create-table;
 Contact.^create-indexes; # Safe to repeat; also adds declarations to existing tables.
 ```
 
-The driver preserves the core's SQL names, key order and legacy unique constraints. Catalog inspection uses the current database and a bound table name. Prefix keys, descending keys, invisible indexes and non-BTREE indexes cannot be mistaken for the default complete ascending definitions. Conflicting definitions raise `X::Red::Index` before pending indexes are created; duplicate existing data still raises `X::Red::Driver::Mapped::Unique`. No index is silently rebuilt and stored values, collation and NULL semantics are unchanged.
+The driver preserves the core's SQL names, key order and legacy unique constraints. Catalog inspection uses the current database and a bound table name. Prefix keys, descending keys, invisible indexes and non-BTREE indexes cannot be mistaken for the default complete ascending definitions. Conflicting definitions raise X::Red::Index before pending indexes are created; duplicate existing data still raises X::Red::Driver::Mapped::Unique. No index is silently rebuilt and stored values, collation and NULL semantics are unchanged.
 
 Functional keys require MySQL 8.0.13 or later and follow MySQL's restrictions on functions and result types, including TEXT/BLOB expressions. DDL has no bound parameters. Catalog normalization handles MySQL's literal escaping, utf8mb4 introducers and function spelling while retaining casts, lengths, grouping and explicit collations. It assumes the driver's default utf8mb4 connection charset.
 
@@ -189,16 +204,14 @@ Offline driver tests can run without MySQL:
 
 The translation tests require the pinned Red API. t/07-query-mysql.t covers offsets, projected JSON operations, and bound text across pagination and tail boundaries. Text results reported by MySQL using BLOB-family types are decoded only when their result metadata specifies a nonbinary charset; actual binary BLOB columns remain byte buffers.
 
-To validate new core APIs using a local Red checkout rather than the pinned Docker revision, use Rakudo 2026.09 with a disposable MySQL 8.4 server. Set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER` and `MYSQL_PASSWORD` for that server, then run:
+To validate new core APIs using a local Red checkout rather than the pinned Docker revision, use Rakudo 2026.09 with a disposable MySQL 8.4 server. Set MYSQL_HOST, MYSQL_PORT, MYSQL_USER and MYSQL_PASSWORD for that server, then run:
 
-```sh
-export RED_SOURCE=/path/to/Red RAKUDO_RAKUAST=0
-raku tools/red-test-exec.raku "$RED_SOURCE/t/97-indexes.rakutest"
-prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" "$RED_SOURCE/t"
-prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" t
-```
+    export RED_SOURCE=/path/to/Red RAKUDO_RAKUAST=0
+    raku tools/red-test-exec.raku "$RED_SOURCE/t/97-indexes.rakutest"
+    prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" "$RED_SOURCE/t"
+    prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" t
 
-The executor adds both checkouts to the module search path and creates one database per file. `tools/test.sh` retains its exact pinned-revision check; the commands above explicitly select the local core without changing CI pins.
+The executor adds both checkouts to the module search path and creates one database per file. tools/test.sh retains its exact pinned-revision check; the commands above explicitly select the local core without changing CI pins.
 
 Author
 ------

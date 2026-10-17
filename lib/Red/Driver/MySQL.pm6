@@ -2,6 +2,9 @@ use DBIish;
 need DBDish::mysql::Connection;
 use Red::AST;
 use Red::Driver;
+use Red::AST::Savepoint;
+use Red::AST::RollbackToSavepoint;
+use Red::AST::ReleaseSavepoint;
 use Red::Statement;
 use Red::AST::Value;
 use Red::AST::Select;
@@ -238,6 +241,27 @@ method begin {
     self.debug: $sql;
     $trans.dbh.execute: $sql;
     $trans
+}
+
+# MySQL does not support savepoint commands in the prepared-statement protocol.
+method !savepoint-command(Red::AST:D $query) {
+    CATCH { default { self.map-exception($_).throw } }
+    my Str $sql = self.translate($query).key;
+    self.debug($sql);
+    $!dbh.execute($sql) unless $*RED-DRY-RUN;
+    self
+}
+
+method savepoint(Str:D $name) {
+    self!savepoint-command(Red::AST::Savepoint.new(:$name))
+}
+
+method rollback-to-savepoint(Str:D $name) {
+    self!savepoint-command(Red::AST::RollbackToSavepoint.new(:$name))
+}
+
+method release-savepoint(Str:D $name) {
+    self!savepoint-command(Red::AST::ReleaseSavepoint.new(:$name))
 }
 
 #| Table name wrapper
@@ -630,6 +654,15 @@ say Post.^create:
 =item C<Str  :$password>
 =item C<Str  :$database>
 =item C<UInt :$port>
+
+=head2 Savepoints
+
+With a Red checkout providing the savepoint API, nested transactions use MySQL
+savepoints on the existing connection. Savepoint names are quoted as identifiers.
+The driver executes savepoint commands through the text protocol because MySQL
+does not support them as prepared statements. Rolling back to a savepoint keeps
+the marker active; releasing it does not commit the surrounding transaction.
+Dry runs translate the commands without executing them.
 
 =head2 Declarative indexes
 
