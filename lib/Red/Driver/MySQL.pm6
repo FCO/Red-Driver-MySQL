@@ -8,6 +8,8 @@ use Red::AST::Select;
 use Red::AST::Infix;
 use Red::AST::Infixes;
 use Red::AST::Function;
+use Red::AST::CreateIndex;
+use Red::Index;
 use Red::Driver::CommonSQL;
 use Red::AST::LastInsertedRow;
 use Red::AST::TableComment;
@@ -21,6 +23,7 @@ use X::Red::Exceptions;
 use UUID;
 use Red::SchemaReader;
 use Red::Driver::MySQL::SchemaReader;
+use Red::Driver::MySQL::IndexKeys;
 use Red::Type::Json;
 use JSON::Fast;
 unit class Red::Driver::MySQL does Red::Driver::CommonSQL;
@@ -34,6 +37,56 @@ has DBDish::mysql::Connection $.dbh;
 
 #| Read tables, columns and indexes from the connected database.
 method schema-reader { Red::Driver::MySQL::SchemaReader.new: :driver(self) }
+
+method index-key-fingerprint(Str $key --> Str) { mysql-index-key($key) }
+
+#| Inspect ordered index keys, including legacy unique constraints and PRIMARY.
+method indexes-for-table(Str $table --> Array) {
+    my $statement = self.execute(q:to/SQL/, $table);
+        SELECT INDEX_NAME AS name, NON_UNIQUE AS non_unique,
+               COLUMN_NAME AS column_name, EXPRESSION AS expression,
+               SUB_PART AS sub_part, COLLATION AS ordering,
+               INDEX_TYPE AS index_type, IS_VISIBLE AS is_visible
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+        ORDER BY INDEX_NAME, SEQ_IN_INDEX
+        SQL
+    my @indexes;
+    for self.index-catalog-rows($statement) -> $row {
+        my %row = $row.map({
+            .key => (.value ~~ Blob:D ?? .value.decode('utf8') !! .value)
+        }).Hash;
+        if !@indexes || @indexes.tail<name> ne %row<name> {
+            @indexes.push: { :name(%row<name>), :unique(!%row<non_unique>),
+                :keys[], :partial(False), :valid(True) };
+        }
+        my $key = %row<column_name>.defined
+            ?? self.table-name-wrapper(%row<column_name>)
+            !! (%row<expression>.defined ?? mysql-index-catalog-key(%row<expression>) !! Str);
+        if !$key.defined || !$key.chars {
+            @indexes.tail<valid> = False;
+            $key = '';
+        }
+        $key ~= "({%row<sub_part>})" if %row<sub_part>.defined;
+        $key ~= ' DESC' if (%row<ordering> // '') eq 'D';
+        @indexes.tail<keys>.push: $key;
+        @indexes.tail<valid> &&= %row<index_type> eq 'BTREE'
+            && %row<is_visible> eq 'YES' && (%row<ordering> // '') eq 'A';
+    }
+    @indexes.Array
+}
+
+# Keep the DDL context through function arguments, including arithmetic groups
+# which MySQL prints with parentheses in STATISTICS.EXPRESSION.
+multi method translate(Red::AST::Function $function, 'index') {
+    my @bind;
+    my @args = $function.args.map(-> $argument {
+        my ($sql, @values) := self.translate($argument, 'index').kv;
+        @bind.append: @values;
+        $argument ~~ Red::AST::Infix ?? "($sql)" !! $sql
+    });
+    "{$function.func}({@args.join(', ')})" => @bind
+}
 
 submethod BUILD(
     DBDish::mysql::Connection :$!dbh,
@@ -91,7 +144,7 @@ class Statement does Red::Statement {
             my $row = $stt.row(:hash);
             if $row.defined {
                 for @!text-columns -> $name {
-                    $row{$name} = $row{$name}.decode('utf8') if $row{$name} ~~ Blob;
+                    $row{$name} = $row{$name}.decode('utf8') if $row{$name} ~~ Blob:D;
                 }
             }
             return $row;
@@ -578,6 +631,37 @@ say Post.^create:
 =item C<Str  :$database>
 =item C<UInt :$port>
 
+=head2 Declarative indexes
+
+With a Red checkout providing Red::Index and Red::AST::CreateIndex, MySQL supports
+the core's declarative column, composite, functional and unique indexes:
+
+=begin code :lang<raku>
+model Contact {
+    has Int $.id is serial;
+    has Int $.account-id is indexed<account-email>;
+    has Str $.email is indexed('account-email', { .lc });
+    has Str $.code is unique;
+    has $.email-prefix is index{ .email.substr(0, 2) };
+}
+Contact.^create-table;
+Contact.^create-indexes; # Safe to repeat; also adds declarations to existing tables.
+=end code
+
+The driver preserves the core's SQL names, key order and legacy unique
+constraints. Catalog inspection uses the current database and a bound table name.
+Prefix keys, descending keys, invisible indexes and non-BTREE indexes cannot be
+mistaken for the default complete ascending definitions. Conflicting definitions
+raise X::Red::Index before pending indexes are created; duplicate existing data
+still raises X::Red::Driver::Mapped::Unique. No index is silently rebuilt and
+stored values, collation and NULL semantics are unchanged.
+
+Functional keys require MySQL 8.0.13 or later and follow MySQL's restrictions on
+functions and result types, including TEXT/BLOB expressions. DDL has no bound
+parameters. Catalog normalization handles MySQL's literal escaping, utf8mb4
+introducers and function spelling while retaining casts, lengths, grouping and
+explicit collations. It assumes the driver's default utf8mb4 connection charset.
+
 =head2 Tests
 
 Run the driver tests and the pinned upstream Red suite against MySQL 8.4:
@@ -588,10 +672,10 @@ docker compose down --volumes
 =end code
 
 Each test file gets a separate disposable database. The same command runs on
-GitHub Actions for pushes and pull requests with RAKUDO_RAKUAST=0.
-tools/red-revision pins Red to d01165685356cc06ec2e00e57ef561b857699af2 for
+GitHub Actions for pushes and pull requests with Rakudo 2026.09 and RAKUDO_RAKUAST=0.
+tools/red-revision pins Red to d91f0d2ac2d84c3551951e777b2c718a2735617d for
 the build and runner, including the JSON operations, projection chains, and SQL
-tail regression suites. TEST_JOBS controls parallelism (default: 4).
+tail and declarative index regression suites. TEST_JOBS controls parallelism (default: 4).
 
 For an existing disposable MySQL server and a separate Red checkout:
 
@@ -618,6 +702,21 @@ offsets, projected JSON operations, and bound text across pagination and tail
 boundaries. Text results reported by MySQL using BLOB-family types are decoded
 only when their result metadata specifies a nonbinary charset; actual binary
 BLOB columns remain byte buffers.
+
+To validate new core APIs using a local Red checkout rather than the pinned
+Docker revision, use Rakudo 2026.09 with a disposable MySQL 8.4 server. Set
+MYSQL_HOST, MYSQL_PORT, MYSQL_USER and MYSQL_PASSWORD for that server, then run:
+
+=begin code
+export RED_SOURCE=/path/to/Red RAKUDO_RAKUAST=0
+raku tools/red-test-exec.raku "$RED_SOURCE/t/97-indexes.rakutest"
+prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" "$RED_SOURCE/t"
+prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" t
+=end code
+
+The executor adds both checkouts to the module search path and creates one
+database per file. tools/test.sh retains its exact pinned-revision check; the
+commands above explicitly select the local core without changing CI pins.
 
 =head2 Author
 

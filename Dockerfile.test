@@ -1,4 +1,4 @@
-FROM rakudo-star:2026.06-bookworm
+FROM rakudo-star:2026.09-bookworm
 ENV RAKUDO_RAKUAST=0
 
 RUN apt-get update -qq \

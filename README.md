@@ -143,6 +143,27 @@ Parameters
 
   * `UInt :$port`
 
+Declarative indexes
+-------------------
+
+With a Red checkout providing `Red::Index` and `Red::AST::CreateIndex`, MySQL supports the core's declarative column, composite, functional and unique indexes:
+
+```raku
+model Contact {
+    has Int $.id is serial;
+    has Int $.account-id is indexed<account-email>;
+    has Str $.email is indexed('account-email', { .lc });
+    has Str $.code is unique;
+    has $.email-prefix is index{ .email.substr(0, 2) };
+}
+Contact.^create-table;
+Contact.^create-indexes; # Safe to repeat; also adds declarations to existing tables.
+```
+
+The driver preserves the core's SQL names, key order and legacy unique constraints. Catalog inspection uses the current database and a bound table name. Prefix keys, descending keys, invisible indexes and non-BTREE indexes cannot be mistaken for the default complete ascending definitions. Conflicting definitions raise `X::Red::Index` before pending indexes are created; duplicate existing data still raises `X::Red::Driver::Mapped::Unique`. No index is silently rebuilt and stored values, collation and NULL semantics are unchanged.
+
+Functional keys require MySQL 8.0.13 or later and follow MySQL's restrictions on functions and result types, including TEXT/BLOB expressions. DDL has no bound parameters. Catalog normalization handles MySQL's literal escaping, utf8mb4 introducers and function spelling while retaining casts, lengths, grouping and explicit collations. It assumes the driver's default utf8mb4 connection charset.
+
 Tests
 -----
 
@@ -151,7 +172,7 @@ Run the driver tests and the pinned upstream Red suite against MySQL 8.4:
     docker compose up --build --abort-on-container-exit --exit-code-from tests
     docker compose down --volumes
 
-Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with RAKUDO_RAKUAST=0. tools/red-revision pins Red to d01165685356cc06ec2e00e57ef561b857699af2 for the build and runner, including the JSON operations, projection chains, and SQL tail regression suites. TEST_JOBS controls parallelism (default: 4).
+Each test file gets a separate disposable database. The same command runs on GitHub Actions for pushes and pull requests with Rakudo 2026.09 and RAKUDO_RAKUAST=0. tools/red-revision pins Red to d91f0d2ac2d84c3551951e777b2c718a2735617d for the build and runner, including the JSON operations, projection chains, and SQL tail and declarative index regression suites. TEST_JOBS controls parallelism (default: 4).
 
 For an existing disposable MySQL server and a separate Red checkout:
 
@@ -167,6 +188,17 @@ Offline driver tests can run without MySQL:
     RAKUDO_RAKUAST=0 raku -Ilib -I/path/to/Red/lib t/06-query-translation.t
 
 The translation tests require the pinned Red API. t/07-query-mysql.t covers offsets, projected JSON operations, and bound text across pagination and tail boundaries. Text results reported by MySQL using BLOB-family types are decoded only when their result metadata specifies a nonbinary charset; actual binary BLOB columns remain byte buffers.
+
+To validate new core APIs using a local Red checkout rather than the pinned Docker revision, use Rakudo 2026.09 with a disposable MySQL 8.4 server. Set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER` and `MYSQL_PASSWORD` for that server, then run:
+
+```sh
+export RED_SOURCE=/path/to/Red RAKUDO_RAKUAST=0
+raku tools/red-test-exec.raku "$RED_SOURCE/t/97-indexes.rakutest"
+prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" "$RED_SOURCE/t"
+prove6 -j 4 -e "raku $PWD/tools/red-test-exec.raku" t
+```
+
+The executor adds both checkouts to the module search path and creates one database per file. `tools/test.sh` retains its exact pinned-revision check; the commands above explicitly select the local core without changing CI pins.
 
 Author
 ------

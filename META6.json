@@ -17,6 +17,7 @@
   "perl": "6.c",
   "provides": {
     "Red::Driver::MySQL": "lib/Red/Driver/MySQL.pm6",
+    "Red::Driver::MySQL::IndexKeys": "lib/Red/Driver/MySQL/IndexKeys.pm6",
     "Red::Driver::MySQL::SchemaReader": "lib/Red/Driver/MySQL/SchemaReader.pm6"
   },
   "resources": [
