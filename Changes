@@ -1,6 +1,9 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+    - Rename driver modules to .rakumod and update distribution provides.
+    - Preserve composite UNIQUE and AUTO_INCREMENT metadata for Red schema sync.
+    - Expose column dependencies and isolate runner databases across containers.
     - Execute savepoint operations through MySQL's text protocol, including dry runs
     - Test quoted savepoints, repeated rollback, release and constraint-error recovery
     - Support Red's declarative indexes through ordered MySQL STATISTICS catalog inspection

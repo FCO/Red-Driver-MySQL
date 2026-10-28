@@ -12,7 +12,7 @@ sub MAIN(Str $test) {
         password => %*ENV<MYSQL_PASSWORD> // 'red-driver-test',
     ;
     my $admin = DBIish.connect('mysql', |%connection);
-    my $database = "red_mysql_test_{$*PID}";
+    my $database = "red_mysql_test_{$*PID}_{now.Int}_{(1000000000.rand.Int)}";
     $admin.execute("CREATE DATABASE `$database`");
     my $status;
     {

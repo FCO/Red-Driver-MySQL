@@ -91,7 +91,7 @@ method indexes-of(Str:D $table) {
 
 method table-definition(Str:D $table) {
     my @columns = self!rows(q:to/SQL/, $table);
-        SELECT COLUMN_NAME AS name, COLUMN_TYPE AS column_type, IS_NULLABLE AS nullable
+        SELECT COLUMN_NAME AS name, COLUMN_TYPE AS column_type, IS_NULLABLE AS nullable, EXTRA AS extra
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION
@@ -110,13 +110,16 @@ method table-definition(Str:D $table) {
             table => %row<referenced_table>, column => %row<referenced_column>,
         );
     }
-    Red::Cli::Table.new(:name($table), :columns(@columns.map(-> %row {
+    Red::Cli::Table.new(:name($table),
+        :constraints(@indexes.grep({ .<unique> && !.<primary> }).map(*.<columns>).Array),
+        :columns(@columns.map(-> %row {
         my @keys = @indexes.grep({ .<columns>.first(* eq %row<name>).defined });
         Red::Cli::Column.new:
             :name(%row<name>), :type(%row<column_type>),
             :perl-type($!driver.type-for-sql(%row<column_type>)),
             :nullable(%row<nullable> eq 'YES'),
             :pk(so @keys.first(*.<primary>)),
+            :auto-increment(so (%row<extra> // '').contains('auto_increment')),
             :unique(so @keys.first({ .<unique> && .<columns>.elems == 1 && !.<primary> })),
             :references(%references{%row<name>} // Any);
     }).Array))
@@ -183,4 +186,14 @@ multi method table-definition-from-create-table(Str:D $sql) {
                     :perl-type($!driver.type-for-sql(.<type>))
             }).Array),
     }
+}
+
+method column-dependencies(Str $table, Str $column) {
+    my @dependencies = self.indexes-of($table).grep({ .<columns>.first(* eq $column).defined }).map(*.<name>);
+    @dependencies.append: self!rows(q:to/SQL/, $table, $column).map(*.<name>);
+        SELECT CONSTRAINT_NAME AS name FROM information_schema.KEY_COLUMN_USAGE
+        WHERE REFERENCED_TABLE_SCHEMA=DATABASE()
+          AND REFERENCED_TABLE_NAME=? AND REFERENCED_COLUMN_NAME=?
+        SQL
+    @dependencies
 }
