@@ -706,7 +706,7 @@ docker compose down --volumes
 
 Each test file gets a separate disposable database. The same command runs on
 GitHub Actions for pushes and pull requests with Rakudo 2026.09 and RAKUDO_RAKUAST=0.
-tools/red-revision pins Red to d91f0d2ac2d84c3551951e777b2c718a2735617d for
+tools/red-revision pins Red to 52e1d1a49cf01ad1afa3310e7654f04c5de4a1d5 for
 the build and runner, including the JSON operations, projection chains, and SQL
 tail and declarative index regression suites. TEST_JOBS controls parallelism (default: 4).
 

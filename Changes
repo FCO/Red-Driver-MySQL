@@ -12,6 +12,7 @@ Revision history for Red-Driver-MySQL
     - Preserve NULL text metadata and keep index DDL quoted and parameter-free
     - Add index regressions and document validation against a local Red checkout
     - Use Rakudo 2026.09 and the published Red index API revision in driver CI
+    - Pin Red schema sync and cross-driver diff fixes in driver CI
 
 0.0.2  2026-10-15T18:11:40+01:00
     - Remove the external fixture patch and pin Red's upstream MySQL fixture fixes
