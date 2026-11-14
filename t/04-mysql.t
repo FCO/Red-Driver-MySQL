@@ -40,6 +40,13 @@ is OnlySerial.^all.elems, 3, 'commit persists the transaction';
 
 my $reader = $*RED-DB.schema-reader;
 ok $reader.tables-names.first(* eq 'natural_key').defined, 'list tables in the current database';
+ok $reader.table-definition('only_serial').columns[0].auto-increment,
+    'catalog reports AUTO_INCREMENT';
+nok $reader.table-definition('natural_key').columns[0].auto-increment,
+    'catalog distinguishes supplied natural keys';
+$*RED-DB.execute('CREATE TABLE catalog_unique (left_value INTEGER, right_value INTEGER, UNIQUE(left_value, right_value))');
+is-deeply $reader.table-definition('catalog_unique').constraints,
+    [['left_value', 'right_value'],], 'catalog retains ordered composite unique group';
 my $definition = $reader.table-definition('composite_key');
 is $definition.name, 'composite_key', 'read information_schema table definition';
 is $definition.columns.grep(*.pk).elems, 2, 'read composite primary key';

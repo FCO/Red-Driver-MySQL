@@ -25,6 +25,8 @@ my @tables = $reader.table-definition-from-create-table($sql);
 is @tables.elems, 2, 'parse multiple CREATE TABLE statements';
 is @tables[0].name, 'person', 'quoted table name';
 ok @tables[0].columns[0].pk, 'table primary key applied to column';
+ok @tables[0].columns[0].auto-increment, 'automatic primary key is retained';
+nok @tables[1].columns[0].auto-increment, 'ordinary primary key is not automatic';
 nok @tables[0].columns[0].nullable, 'primary key is not nullable';
 ok @tables[0].columns[1].nullable, 'keywords in default strings are ignored';
 ok @tables[0].columns[1].unique, 'single column unique index';
@@ -37,4 +39,8 @@ is-deeply @tables[1].columns[1].references, %(table => 'person', column => 'id')
 is @tables[1].columns[3].perl-type, 'Str', 'enum type';
 nok $reader.table-definition-from-create-table(Any).exists, 'missing table';
 dies-ok { $reader.table-definition-from-create-table('invalid SQL') }, 'invalid SQL rejected';
+is-deeply @tables[0].constraints, [['name'],], 'single-column unique group retained';
+is-deeply @tables[1].constraints, [['author_id', 'title'],], 'composite unique group retained';
+my $inline = $reader.table-definition-from-create-table('CREATE TABLE inline_unique (code VARCHAR(10) UNIQUE)').head;
+is-deeply $inline.constraints, [['code'],], 'inline unique group retained';
 done-testing;

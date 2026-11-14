@@ -1,3 +1,5 @@
+use Red::Driver::MySQL::Support;
+use Red::Driver::MySQL::Migrations;
 use DBIish;
 need DBDish::mysql::Connection;
 use Red::AST;
@@ -29,7 +31,7 @@ use Red::Driver::MySQL::SchemaReader;
 use Red::Driver::MySQL::IndexKeys;
 use Red::Type::Json;
 use JSON::Fast;
-unit class Red::Driver::MySQL does Red::Driver::CommonSQL;
+unit class Red::Driver::MySQL does Red::Driver::MySQL::Migrations;
 
 has Str                       $!user;
 has Str                       $!password;
@@ -586,6 +588,37 @@ multi method map-exception(X::DBDish::DBError $x where { .code == 1050 }) {
         :orig-exception($x),
         :table($table ?? $table<table>.Str !! "")
 }
+
+multi method translate(Red::AST::RegexCapture $_, $context?) {
+    my $whole = .selection ~~ Str && .selection eq '$/';
+    X::Red::Compiler::Unsupported.new(:fatal,
+        :reason('Scalar regex capture text is unsupported by this driver')).throw unless $whole;
+    my $regex = .match.pattern;
+    X::Red::Compiler::Unsupported.new(:fatal,
+        :reason('Reading whole matches requires a structured regex')).throw
+        unless $regex ~~ Red::Regex;
+    my Bool $boundary = False;
+    $regex.walk(-> $part { $boundary = True if $part[0] eq 'match-boundary' });
+    X::Red::Compiler::Unsupported.new(:fatal,
+        :reason('Whole match reads with Match boundary markers are not implemented')).throw
+        if $boundary;
+    my $subject = self.translate(.match.value,
+        .match.value ~~ Red::AST::Value ?? 'bind' !! $context);
+    my $pattern = self.translate(ast-value($regex.render(:dialect<MySQL>)), 'bind');
+    # Keep a Unicode text result while comparing case and trailing spaces exactly.
+    "(CONVERT(REGEXP_SUBSTR({$subject.key}, {$pattern.key}, 1, 1, 'cn') USING utf8mb4)"
+        ~ ' COLLATE utf8mb4_0900_bin)' => [|$subject.value, |$pattern.value]
+}
+
+multi method translate(Red::AST::RegexMatch $_, $context?) {
+    X::Red::Compiler::Unsupported.new(:fatal,
+        :reason('MySQL requires a structured regex, not a PostgreSQL pattern')).throw
+        unless .pattern ~~ Red::Regex;
+    my $subject = self.translate(.value, .value ~~ Red::AST::Value ?? 'bind' !! $context);
+    my $pattern = self.translate(ast-value(.pattern.render(:dialect<MySQL>)), 'bind');
+    "REGEXP_LIKE({$subject.key}, {$pattern.key}, 'cn')" => [|$subject.value, |$pattern.value]
+}
+
 
 =begin pod
 

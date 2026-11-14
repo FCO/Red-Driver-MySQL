@@ -143,20 +143,20 @@ say Post.^create:
 Parameters
 ----------
 
-  * `Str :$user`
+  * `Str  :$user`
 
-  * `Str :$host`
+  * `Str  :$host`
 
-  * `Str :$password`
+  * `Str  :$password`
 
-  * `Str :$database`
+  * `Str  :$database`
 
   * `UInt :$port`
 
 Savepoints
 ----------
 
-With a Red checkout providing the savepoint API, nested transactions use MySQL savepoints on the existing connection. Names are quoted as identifiers and commands use the text protocol. Rolling back to a savepoint keeps its marker active; releasing it does not commit the surrounding transaction. Dry runs do not execute the commands.
+With a Red checkout providing the savepoint API, nested transactions use MySQL savepoints on the existing connection. Savepoint names are quoted as identifiers. The driver executes savepoint commands through the text protocol because MySQL does not support them as prepared statements. Rolling back to a savepoint keeps the marker active; releasing it does not commit the surrounding transaction. Dry runs translate the commands without executing them.
 
 Declarative indexes
 -------------------

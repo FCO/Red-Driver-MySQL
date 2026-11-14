@@ -111,15 +111,15 @@ method table-definition(Str:D $table) {
         );
     }
     Red::Cli::Table.new(:name($table),
-        :constraints(@indexes.grep({ .<unique> && !.<primary> }).map(*.<columns>).Array),
+        :constraints(@indexes.grep({ .<unique> && !.<primary> }).map({ .<columns>.Array }).Array),
         :columns(@columns.map(-> %row {
         my @keys = @indexes.grep({ .<columns>.first(* eq %row<name>).defined });
         Red::Cli::Column.new:
             :name(%row<name>), :type(%row<column_type>),
             :perl-type($!driver.type-for-sql(%row<column_type>)),
             :nullable(%row<nullable> eq 'YES'),
+            :auto-increment(so (%row<extra> // '').lc.contains('auto_increment')),
             :pk(so @keys.first(*.<primary>)),
-            :auto-increment(so (%row<extra> // '').contains('auto_increment')),
             :unique(so @keys.first({ .<unique> && .<columns>.elems == 1 && !.<primary> })),
             :references(%references{%row<name>} // Any);
     }).Array))
@@ -134,6 +134,7 @@ multi method table-definition-from-create-table(Str:D $sql) {
         my @columns;
         my %columns;
         my @constraints;
+        my @unique-groups;
         for $table<definition> -> $definition {
             my $parsed-definition = Definition.parse($definition.Str.trim);
             die "Unsupported MySQL table definition: $definition" unless $parsed-definition;
@@ -146,9 +147,11 @@ multi method table-definition-from-create-table(Str:D $sql) {
                     :type($column<type>.Str.trim.lc),
                     :nullable(!so $tail ~~ /:i 'NOT' \s+ 'NULL' | 'PRIMARY' \s+ 'KEY'/),
                     :pk(so $tail ~~ /:i 'PRIMARY' \s+ 'KEY'/),
+                    :auto-increment(so $tail ~~ /:i <|w> 'AUTO_INCREMENT' <|w>/),
                     :unique(so $tail ~~ /:i 'UNIQUE'/),
                     :references(%()),
                 ;
+                @unique-groups.push: [$name] if %data<unique>;
                 @columns.push: %data;
                 %columns{$name} := @columns.tail;
             } else {
@@ -164,6 +167,7 @@ multi method table-definition-from-create-table(Str:D $sql) {
             }
             if $constraint<unique> -> $unique {
                 my @names = key-columns($unique<key-list>);
+                @unique-groups.push: @names.Array;
                 %columns{@names.head}<unique> = True if @names == 1;
             }
             if $constraint<foreign> -> $foreign {
@@ -180,6 +184,7 @@ multi method table-definition-from-create-table(Str:D $sql) {
         }
         Red::Cli::Table.new:
             :name(unquote $table<name><identifier>.tail.Str),
+            :constraints(@unique-groups.Array),
             :columns(@columns.map({
                 Red::Cli::Column.new: |$_,
                     :references(.<references>.elems ?? .<references> !! Any),

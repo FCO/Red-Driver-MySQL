@@ -1,0 +1,26 @@
+use Test;
+use Red::Regex;
+use Red::Compiler::Regex;
+use X::Red::Exceptions;
+
+my constant HAS-RAKUAST = $*CU.^name eq 'RakuAST::CompUnit';
+unless HAS-RAKUAST {
+    plan :skip-all('Regex compilation needs the RakuAST frontend');
+    exit;
+}
+
+subtest 'Native renderer capabilities' => {
+    my $scoped = Red::Compiler::Regex.new.compile(q[/a :i b/].AST.statements[0].expression);
+    is $scoped.render(:dialect<MySQL>), 'a(?i:b)', 'MySQL supports scoped modes';
+    my $large = Red::Compiler::Regex.new.compile(q[/a ** 256/].AST.statements[0].expression);
+    is $large.render(:dialect<MySQL>), '(?:a){256,256}', 'MySQL retains larger bounds';
+};
+
+subtest 'Backreferences do not acquire a fictitious bounded lookbehind width' => {
+    my $regex = Red::Compiler::Regex.new.compile(
+        q[/aa <?after [(a) $0]>/].AST.statements[0].expression);
+    throws-like { $regex.render(:dialect<MySQL>) }, X::Red::Compiler::Unsupported,
+        :fatal(*.so), 'MySQL lookbehind remains subject to its native width restrictions';
+};
+
+done-testing;

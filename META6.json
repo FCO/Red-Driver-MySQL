@@ -18,7 +18,10 @@
   "provides": {
     "Red::Driver::MySQL": "lib/Red/Driver/MySQL.rakumod",
     "Red::Driver::MySQL::IndexKeys": "lib/Red/Driver/MySQL/IndexKeys.rakumod",
-    "Red::Driver::MySQL::SchemaReader": "lib/Red/Driver/MySQL/SchemaReader.rakumod"
+    "Red::Driver::MySQL::Migrations": "lib/Red/Driver/MySQL/Migrations.rakumod",
+    "Red::Driver::MySQL::Regex": "lib/Red/Driver/MySQL/Regex.rakumod",
+    "Red::Driver::MySQL::SchemaReader": "lib/Red/Driver/MySQL/SchemaReader.rakumod",
+    "Red::Driver::MySQL::Support": "lib/Red/Driver/MySQL/Support.rakumod"
   },
   "resources": [
   ],
