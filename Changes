@@ -1,6 +1,8 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+    - Declare the minimum Red version (0.2.10) so installs cannot resolve to
+      Red 0.2.7, which lacks Red::AST::RegexCapture and fails to compile.
 
 0.0.3  2026-11-14T18:23:58Z
     - Rename driver modules to .rakumod and update distribution provides.
