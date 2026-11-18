@@ -89,10 +89,6 @@ Install
 
     zef install Red::Driver::MySQL
 
-This driver requires Red 0.2.10 or newer (`Red:ver<0.2.10+>:api<2>`). Older
-Red releases do not provide `Red::AST::RegexCapture` and cannot compile the
-driver.
-
 Synopsis
 --------
 

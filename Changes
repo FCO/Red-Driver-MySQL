@@ -1,6 +1,8 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+
+0.0.4  2026-11-18T01:58:50Z
     - Declare the minimum Red version (0.2.10) so installs cannot resolve to
       Red 0.2.7, which lacks Red::AST::RegexCapture and fails to compile.
 
