@@ -1,9 +1,11 @@
 [![Build Status](https://travis-ci.org/FCO/Red-Driver-MySQL.svg?branch=master)](https://travis-ci.org/FCO/Red-Driver-MySQL)
 
-### method schema-reader
+### sub row-security-row
 
 ```raku
-method schema-reader() returns Mu
+sub row-security-row(
+    $statement
+) returns Mu
 ```
 
 Read tables, columns and indexes from the connected database.
