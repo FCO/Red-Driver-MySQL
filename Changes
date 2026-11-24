@@ -1,6 +1,8 @@
 Revision history for Red-Driver-MySQL
 
 {{$NEXT}}
+
+0.0.5  2026-11-24T02:25:30Z
     - Fix tests
 
 0.0.4  2026-11-18T01:58:50Z
