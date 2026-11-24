@@ -1,3 +1,6 @@
+use Red::RowSecurity;
+use Red::RowSecurity::Context;
+use Red::AST::Insert;
 use Red::Driver::MySQL::Support;
 use Red::Driver::MySQL::Migrations;
 use DBIish;
@@ -41,6 +44,46 @@ has Str                       $!database;
 has DBDish::mysql::Connection $.dbh;
 
 #| Read tables, columns and indexes from the connected database.
+sub row-security-row($statement) {
+    my $row := $statement.row;
+    return Nil if $row =:= IterationEnd || !$row;
+    $row
+}
+sub row-security-first($driver, Str:D $sql, *@bind) {
+    row-security-row($driver.execute($sql, |@bind))
+}
+method row-security-capabilities(--> Map:D) { Map.new(:filter(True), :atomic-write(True)) }
+method row-security-check-suffix(--> Str:D) { ' FOR UPDATE' }
+method check-row-security-write($model) {
+    my $engine = row-security-first(self,
+        'SELECT ENGINE AS engine FROM information_schema.TABLES '
+            ~ 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?', $model.^table);
+    row-security-error('Protected MySQL writes require InnoDB tables')
+        unless $engine && $engine<engine>.lc eq 'innodb';
+    my $isolation = row-security-first(self, 'SELECT @@transaction_isolation AS isolation_level');
+    row-security-error('Protected MySQL writes require REPEATABLE READ or SERIALIZABLE')
+        unless $isolation<isolation_level> eq any(<REPEATABLE-READ SERIALIZABLE>);
+    my $trigger = row-security-first(self,
+        'SELECT 1 AS found FROM information_schema.TRIGGERS '
+            ~ 'WHERE TRIGGER_SCHEMA = DATABASE() LIMIT 1');
+    row-security-error('Protected MySQL writes do not support triggers') if $trigger;
+    my $cascade = row-security-first(self,
+        'SELECT 1 AS found FROM information_schema.REFERENTIAL_CONSTRAINTS '
+            ~ 'WHERE CONSTRAINT_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = ? '
+            ~ "AND (UPDATE_RULE NOT IN ('NO ACTION', 'RESTRICT') "
+            ~ "OR DELETE_RULE NOT IN ('NO ACTION', 'RESTRICT')) LIMIT 1", $model.^table);
+    row-security-error('Protected MySQL writes do not support cascading foreign keys') if $cascade;
+}
+method lock-row-security-write($query) {
+    return if $query ~~ Red::AST::Insert;
+    my $filter = self.translate($query.filter, 'where');
+    my $table = self.table-name-wrapper($query.model.^table);
+    my $alias = self.table-name-wrapper($query.model.^as);
+    my $statement = self.execute("SELECT 1 AS locked FROM $table AS $alias"
+        ~ ($filter.key.chars ?? ' WHERE ' ~ $filter.key !! '') ~ ' FOR UPDATE', |$filter.value);
+    while row-security-row($statement) { }
+}
+
 method schema-reader { Red::Driver::MySQL::SchemaReader.new: :driver(self) }
 
 method index-key-fingerprint(Str $key --> Str) { mysql-index-key($key) }
@@ -216,6 +259,8 @@ multi method prepare(Str $query) {
 # Red::Schema.drop can visit a referenced table before its children. Restore
 # the session setting even if DROP fails; normal writes retain FK validation.
 method execute($query, *@bind) {
+    return self.Red::Driver::execute($query, |@bind)
+        unless $query ~~ Str && $query ~~ /^:i \s* DROP \s+ TABLE /;
     my &execute = {
         my @statements = self.prepare($query);
         (.execute(|@bind.map({ self.deflate($_) })) for @statements).tail

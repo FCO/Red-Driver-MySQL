@@ -1,0 +1,33 @@
+use Test;
+use X::Red::Exceptions;
+use Red::Driver::MySQL::Support;
+
+class MySQLAdmin does Red::Driver::MySQL::Support {
+    has @.sql;
+    method dbh { self }
+    has Str $.mode = '';
+    method table-name-wrapper(Str $name) { '`' ~ $name.subst('`', '``', :g) ~ '`' }
+    method execute(Str $sql, *@bind) {
+        @!sql.push($sql);
+        my $mode = $!mode;
+        class :: { has Str $.mode; method row { %(mode => $!mode) } }.new(:$mode)
+    }
+    multi method prepare(Str $sql) { }
+    method schema-reader { }
+}
+my $mysql = MySQLAdmin.new;
+$mysql.create-database('a`b');
+is $mysql.sql.tail, 'CREATE DATABASE `a``b`', 'MySQL quotes database';
+$mysql.create-user('u`s', :host('local`host'), :password("p'\\word"));
+is $mysql.sql.tail, Q[CREATE USER `u``s`@`local``host` IDENTIFIED BY 'p''\\word'],
+    'MySQL quotes account and escapes password';
+$mysql.create-role('r`o');
+is $mysql.sql.tail, 'CREATE ROLE `r``o`@`%`', 'MySQL quotes role';
+my $no-escapes = MySQLAdmin.new(:mode('NO_BACKSLASH_ESCAPES'));
+$no-escapes.create-user('reader', :password("p'\\word"));
+is $no-escapes.sql.tail,
+    "CREATE USER `reader`@`%` IDENTIFIED BY 'p''\\word'",
+    'MySQL respects NO_BACKSLASH_ESCAPES';
+throws-like { $mysql.create-user('reader', :password("bad\0password")) },
+    X::Red::Administration, 'MySQL rejects NUL passwords';
+done-testing;

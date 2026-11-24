@@ -9,7 +9,7 @@
     "DBIish",
     "JSON::Fast",
     "UUID",
-    "Red:ver<0.2.10+>:api<2>"
+    "Red:ver<0.2.16+>:api<2>"
   ],
   "description": "MySQL driver and schema reader for the Red ORM",
   "license": "Artistic-2.0",
